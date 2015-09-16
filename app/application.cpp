@@ -10,30 +10,13 @@
 #define page "<html> <body> <form action='.' method='post'>  SSID: <input type='text' name='ssid'><br>  Password: <input type='text' name='password'><br>  <input type='submit' value='Submit'></form></body></html>"
 
 
-#define _FOUR_SWITCH_MODE 0
-
-
 void onMessageReceived(String topic, String message); // Forward declaration for our callback
 
 
-#ifdef FOUR_SWITCH_MODE
-    const int latchPin = 0;
-    //Pin connected to clock pin (SH_CP) of 74HC595
-    const int clockPin = 2;
-    ////Pin connected to Data in (DS) of 74HC595
-
-    const int dataPin = 3;
-
-    int register_state = 0;
-
-#else
-    int switches[] = {0, 2};
-#endif
 
 HttpClient hc;
 
 Timer procTimer;
-
 
 
 HttpServer server;
