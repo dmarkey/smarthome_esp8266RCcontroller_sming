@@ -137,7 +137,7 @@ void ActivatePlug(unsigned char PlugNo, boolean On) {
 
 
 
-String mqttName(){
+String mqttNameCmd(){
     String name;
     int id = system_get_chip_id();
     name = "SmartController-";
@@ -146,7 +146,7 @@ String mqttName(){
 }
 
 
-String commandTopic(){
+String commandTopicCmd(){
     String topic;
     int id = system_get_chip_id();
     topic = "/smart_plug_work/SmartPlug-";
@@ -154,19 +154,26 @@ String commandTopic(){
     return topic;
 }
 
+
+
+String commandTopic = commandTopicCmd();
+
+String mqttName = mqttNameCmd();
+
+
 class ReconnectingMqttClient: public MqttClient{
     using MqttClient::MqttClient; // Inherit Base's constructors.
 
     void onError(err_t err)  {
         close();
-        connect(mqttName());
-        subscribe(commandTopic());
+        connect(mqttName);
+        subscribe(commandTopic);
         return;
     }
 
 };
 
-ReconnectingMqttClient mqtt("dmarkey.mooo.com", 8000, onMessageReceived);
+MqttClient mqtt("dmarkey.com", 8000, onMessageReceived);
 
 void printResponse(HttpClient& hc, bool success){
     Serial.print(hc.getResponseString());
@@ -216,21 +223,21 @@ void beaconComplete(){
 void onMessageReceived(String topic, String message)
 {
 
-	Serial.print(topic);
-	if (topic == commandTopic()){
+	Serial.print(message);
+
+	if (topic == commandTopic){
 	    StaticJsonBuffer<200> jsonBuffer;
         const char *json = message.c_str();
         JsonObject& root = jsonBuffer.parseObject((char *)json);
 
         const char * command = root["name"];
-        setTaskStatus(root, 2);
+        //setTaskStatus(root, 2);
 
         if (strcmp(command, "sockettoggle") != -1){
                 processSwitchcmd(root);
                 setTaskStatus(root, 3);
 
         }
-
 
 	}
 
@@ -242,8 +249,9 @@ void onMessageReceived(String topic, String message)
 void processBeaconResponse(HttpClient& hc, bool success){
     Serial.print(hc.getResponseString());
     if (success){
-        mqtt.connect(mqttName());
-        mqtt.subscribe(commandTopic());
+        mqtt.connect(mqttName);
+        mqtt.subscribe(commandTopic);
+
         beaconComplete();
     }
 
@@ -330,7 +338,7 @@ void init()
 
     pinMode(RF_DATA_PIN, OUTPUT);
 
-	Serial.begin(SERIAL_BAUD_RATE); // 115200 by default
+	Serial.begin(115200); // 115200 by default
 	Serial.systemDebugOutput(true); // Debug output to serial
 
 
