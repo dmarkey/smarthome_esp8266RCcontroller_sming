@@ -122,51 +122,73 @@ class PlugController {
 public:
 
 	void ticker() {
-		int time_since_last_event = micros() - last_time;
-		if (time_since_last_event >= time_to_next_event) {
-			(this->*ticker_function_inner)();
-			last_time = micros();
+
+		Serial.println("TICK!");
+
+		if (last_time != 0){
+			Serial.println(micros() - last_time);
+			Serial.println(timings[sent_index - 1]);
+		}
+		last_time = micros();
+
+		bool value = pin_levels[sent_index];
+
+
+
+		digitalWrite(rf_pin, value);
+
+
+
+		int delay = timings[sent_index] ;
+
+		sent_index++;
+
+		if (sent_index == level_index){
+			return;
 		}
 
+		//hw_timer_set_func(&PlugController::ticker);
+
+		taskTimer.initializeUs(delay, TimerDelegate(&PlugController::ticker, this)).startOnce();
+
+		;
+
+
+
+
 	}
 
-	void initial_delay() {
+	void activate_plug(unsigned char plug_number, boolean value) {
 
-		time_to_next_event = 1000;
-		this->ticker_function_inner = &PlugController::first_sequence;
+		in_use = true;
 
-	}
+		//digitalWrite(RF_DATA_PIN, LOW);
 
-	void first_sequence() {
-		if (sequence_number == 4) {
-			&PlugController::second_sequence;
+		//this->add_write_with_delay(1000, LOW);
+
+		unsigned long signal = signals[plug_number][value][swap];
+
+		this->add_write_with_delay(1000000, LOW);
+
+		for (unsigned char i = 0; i < 4; i++) { // repeat 1st signal sequence 4 times
+			send_sync();
+			for (unsigned char k = 0; k < 24; k++) { //as 24 long and short signals, this loop sends each one and if it is long, it takes it away from total delay so that there is a short between it and the next signal and viceversa
+				send_value(bitRead(signal, 23 - k), short_delay);
+			}
+		}
+		for (unsigned char i = 0; i < 4; i++) { // repeat 2nd signal sequence 4 times with NORMAL DELAY
+			long_sync();
+			for (unsigned char k = 0; k < 24; k++) {
+				send_value(bitRead(signal, 23 - k), normal_delay);
+			}
 		}
 
-	}
-
-	void second_sequence() {
-		if (sequence_number == 4) {
-			&PlugController::second_sequence;
-		}
+		//taskTimer.repeating = false;
+		ticker();
 
 	}
 
-	void send_sync_1() {
-		digitalWrite(RF_DATA_PIN, HIGH);
-		time_to_next_event = short_delay;
-
-	}
-
-	void send_sync_2() {
-		digitalWrite(RF_DATA_PIN, LOW);
-		time_to_next_event = sync_delay - short_delay;
-		if (sequence_number == 0) {
-
-		}
-
-	}
-
-	void activate_plug(int plug_number, bool state) {
+	/*void activate_plug(int plug_number, bool state) {
 
 		unsigned long signal = signals[plug_number][state][swap];
 
@@ -175,22 +197,25 @@ public:
 
 		last_time = micros();
 
-		this->ticker_function_inner = &PlugController::initial_delay;
-
 		digitalWrite(rf_pin, LOW);
 
-		taskTimer.initializeUs(100,
-				TimerDelegate(&PlugController::ticker, this));
+		//taskTimer.initializeUs(100,
+		//		TimerDelegate(&PlugController::ticker, this));
 
-	}
+	}*/
 	;
 
 private:
+	bool in_use = false;
+	bool pin_levels[1000];
+	long int timings[1000];
+	int level_index = 0;
+	int sent_index = 0;
+
 	int sequence_number = 0;
 	long int last_time = 0;
 	long int time_to_next_event = 0;
 	Timer taskTimer;
-	void (PlugController::*ticker_function_inner)();
 	int rf_pin = 2;
 	int max_code_cycles = 4;
 
@@ -198,10 +223,10 @@ private:
 	int normal_delay = 500;
 	int signal_delay = 1500;
 
-	int sync_delay = 2650;
-	int extrashort_delay = 3000;
-	int extra_delay = 10000;
-	int current_plug = 0;
+	const int sync_delay = 2650;
+	const int extrashort_delay = 3000;
+	const int extra_delay = 10000;
+	//int current_plug = 0;
 	unsigned char swap = 0;
 
 	long time = 0;
@@ -228,11 +253,41 @@ private:
 			0b101111000001000101010010, 0b101101000101010100010010,
 			0b101110101110010001100010, 0b101100010110110110100010 } } };
 
-	void sendSync() {
-		digitalWrite(rf_pin, HIGH);
-		delayMicroseconds(short_delay);
-		digitalWrite(rf_pin, LOW);
-		delayMicroseconds(sync_delay - short_delay);
+	void send_sync() {
+
+		/*digitalWrite(RF_DATA_PIN, HIGH);
+		 delayMicroseconds(SHORT_DELAY);*/
+		this->add_write_with_delay(short_delay, HIGH);
+
+		//digitalWrite(RF_DATA_PIN, LOW);
+		this->add_write_with_delay(sync_delay - short_delay, LOW);
+		//delayMicroseconds(SYNC_DELAY - SHORT_DELAY);
+	}
+
+	void long_sync() {
+		this->add_write_with_delay(extrashort_delay, HIGH);
+		//digitalWrite(RF_DATA_PIN, HIGH);
+		//delayMicroseconds(EXTRASHORT_DELAY);
+		//digitalWrite(RF_DATA_PIN, LOW);
+		this->add_write_with_delay(extra_delay - extrashort_delay, LOW);
+		//delayMicroseconds(EXTRA_DELAY - EXTRASHORT_DELAY);
+	}
+
+	void send_value(boolean value, unsigned int base_delay) {
+		unsigned long d = value ? signal_delay - base_delay : base_delay;
+		add_write_with_delay(d, HIGH);
+		//digitalWrite(RF_DATA_PIN, HIGH);
+		//delayMicroseconds(d);
+		add_write_with_delay(signal_delay - d, LOW);
+		//digitalWrite(RF_DATA_PIN, LOW);
+		//delayMicroseconds(SIGNAL_DELAY - d);
+	}
+
+	void add_write_with_delay(int delay, bool value) {
+
+		timings[level_index] = delay;
+		pin_levels[level_index] = value;
+		level_index++;
 
 	}
 
@@ -415,6 +470,10 @@ void connectFail() {
 }
 
 void init() {
+
+	pc.activate_plug(0,0);
+
+	return;
 
 	pinMode(RF_DATA_PIN, OUTPUT);
 
