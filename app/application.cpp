@@ -2,6 +2,10 @@
 #include <user_interface.h>
 #include <SmingCore/SmingCore.h>
 
+extern "C"{
+    #include"include/driver/hw_timer.h"
+}
+
 // Put you SSID and Password here
 #define WIFI_SSID "access"
 #define WIFI_PWD ""
@@ -23,7 +27,7 @@ bool httpInProgress = false;
 
 #define DEBUG
 
-#define RF_DATA_PIN    2
+#define RF_DATA_PIN    0
 
 #define MAX_CODE_CYCLES 4
 
@@ -118,182 +122,7 @@ void ActivatePlug(unsigned char PlugNo, boolean On) {
 	}
 }
 
-class PlugController {
-public:
 
-	void ticker() {
-
-		Serial.println("TICK!");
-
-		if (last_time != 0){
-			Serial.println(micros() - last_time);
-			Serial.println(timings[sent_index - 1]);
-		}
-		last_time = micros();
-
-		bool value = pin_levels[sent_index];
-
-
-
-		digitalWrite(rf_pin, value);
-
-
-
-		int delay = timings[sent_index] ;
-
-		sent_index++;
-
-		if (sent_index == level_index){
-			return;
-		}
-
-		//hw_timer_set_func(&PlugController::ticker);
-
-		taskTimer.initializeUs(delay, TimerDelegate(&PlugController::ticker, this)).startOnce();
-
-		;
-
-
-
-
-	}
-
-	void activate_plug(unsigned char plug_number, boolean value) {
-
-		in_use = true;
-
-		//digitalWrite(RF_DATA_PIN, LOW);
-
-		//this->add_write_with_delay(1000, LOW);
-
-		unsigned long signal = signals[plug_number][value][swap];
-
-		this->add_write_with_delay(1000000, LOW);
-
-		for (unsigned char i = 0; i < 4; i++) { // repeat 1st signal sequence 4 times
-			send_sync();
-			for (unsigned char k = 0; k < 24; k++) { //as 24 long and short signals, this loop sends each one and if it is long, it takes it away from total delay so that there is a short between it and the next signal and viceversa
-				send_value(bitRead(signal, 23 - k), short_delay);
-			}
-		}
-		for (unsigned char i = 0; i < 4; i++) { // repeat 2nd signal sequence 4 times with NORMAL DELAY
-			long_sync();
-			for (unsigned char k = 0; k < 24; k++) {
-				send_value(bitRead(signal, 23 - k), normal_delay);
-			}
-		}
-
-		//taskTimer.repeating = false;
-		ticker();
-
-	}
-
-	/*void activate_plug(int plug_number, bool state) {
-
-		unsigned long signal = signals[plug_number][state][swap];
-
-		swap++;
-		swap %= this->max_code_cycles;
-
-		last_time = micros();
-
-		digitalWrite(rf_pin, LOW);
-
-		//taskTimer.initializeUs(100,
-		//		TimerDelegate(&PlugController::ticker, this));
-
-	}*/
-	;
-
-private:
-	bool in_use = false;
-	bool pin_levels[1000];
-	long int timings[1000];
-	int level_index = 0;
-	int sent_index = 0;
-
-	int sequence_number = 0;
-	long int last_time = 0;
-	long int time_to_next_event = 0;
-	Timer taskTimer;
-	int rf_pin = 2;
-	int max_code_cycles = 4;
-
-	int short_delay = 380;
-	int normal_delay = 500;
-	int signal_delay = 1500;
-
-	const int sync_delay = 2650;
-	const int extrashort_delay = 3000;
-	const int extra_delay = 10000;
-	//int current_plug = 0;
-	unsigned char swap = 0;
-
-	long time = 0;
-
-	unsigned long plugs[5][2][4] = { { /*A*/
-	{ 0b101111000001000101011100, 0b101100010110110110101100,
-			0b101110101110010001101100, 0b101101000101010100011100 }, {
-			0b101101010010011101111100, 0b101111100011110000101100,
-			0b101111110111001110001100, 0b101110111000101110111100 } }, { /*B*/
-	{ 0b101101110100001000110101, 0b101101101010100111100101,
-			0b101110011101111000000101, 0b101100100000100011110101 }, {
-			0b101111011001101011010101, 0b101100111011111101000101,
-			0b101110001100011010010101, 0b101100001111000011000101 } }, { /*C*/
-	{ 0b101101010010011101111110, 0b101111100011110000101110,
-			0b101111110111001110001110, 0b101110111000101110111110 }, {
-			0b101110101110010001101110, 0b101101000101010100011110,
-			0b101111000001000101011110, 0b101100010110110110101110 } }, { /*D*/
-	{ 0b101111011001101011010111, 0b101100111011111101000111,
-			0b101100001111000011000111, 0b101110001100011010010111 }, {
-			0b101101110100001000110111, 0b101100100000100011110111,
-			0b101101101010100111100111, 0b101110011101111000000111 } }, { /*MASTER*/
-	{ 0b101111100011110000100010, 0b101110111000101110110010,
-			0b101101010010011101110010, 0b101111110111001110000010 }, {
-			0b101111000001000101010010, 0b101101000101010100010010,
-			0b101110101110010001100010, 0b101100010110110110100010 } } };
-
-	void send_sync() {
-
-		/*digitalWrite(RF_DATA_PIN, HIGH);
-		 delayMicroseconds(SHORT_DELAY);*/
-		this->add_write_with_delay(short_delay, HIGH);
-
-		//digitalWrite(RF_DATA_PIN, LOW);
-		this->add_write_with_delay(sync_delay - short_delay, LOW);
-		//delayMicroseconds(SYNC_DELAY - SHORT_DELAY);
-	}
-
-	void long_sync() {
-		this->add_write_with_delay(extrashort_delay, HIGH);
-		//digitalWrite(RF_DATA_PIN, HIGH);
-		//delayMicroseconds(EXTRASHORT_DELAY);
-		//digitalWrite(RF_DATA_PIN, LOW);
-		this->add_write_with_delay(extra_delay - extrashort_delay, LOW);
-		//delayMicroseconds(EXTRA_DELAY - EXTRASHORT_DELAY);
-	}
-
-	void send_value(boolean value, unsigned int base_delay) {
-		unsigned long d = value ? signal_delay - base_delay : base_delay;
-		add_write_with_delay(d, HIGH);
-		//digitalWrite(RF_DATA_PIN, HIGH);
-		//delayMicroseconds(d);
-		add_write_with_delay(signal_delay - d, LOW);
-		//digitalWrite(RF_DATA_PIN, LOW);
-		//delayMicroseconds(SIGNAL_DELAY - d);
-	}
-
-	void add_write_with_delay(int delay, bool value) {
-
-		timings[level_index] = delay;
-		pin_levels[level_index] = value;
-		level_index++;
-
-	}
-
-};
-
-PlugController pc;
 
 String mqttNameCmd() {
 	String name;
@@ -337,7 +166,7 @@ void processSwitchcmd(JsonObject& obj) {
 	int switch_num = obj["socketnumber"];
 
 	bool state = obj["state"];
-	pc.activate_plug(switch_num - 1, !state);
+	//pc.activate_plug(switch_num - 1, !state);
 
 	//ActivatePlug(switch_num - 1, !state);
 
@@ -470,8 +299,24 @@ void connectFail() {
 }
 
 void init() {
-
-	pc.activate_plug(0,0);
+        System.setCpuFrequency(eCF_160MHz);
+	Serial.begin(115200); // 115200 by default
+	Serial.systemDebugOutput(true); // Debug output to serial
+        
+        pinMode(RF_DATA_PIN, OUTPUT);
+        digitalWrite(RF_DATA_PIN, 1);
+        delay(1000);
+        //digitalWrite(RF_DATA_PIN, 1);
+        bool value = 0;
+        plug = 0;
+        while (true){
+            //digitalWrite(RF_DATA_PIN, value);
+            //value = !value;
+            ActivatePlug(4,1);
+            plug++;
+            //delay(1000);
+            Serial.println("Done");
+        }
 
 	return;
 
